@@ -4,7 +4,7 @@ const axios = require('axios');
 const extract = require('extract-zip');
 const tar = require('tar');
 const downloadReputationDBs = require('./downloadReputationDBs');
-require('dotenv').config();
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 const DB_PATH = path.join(__dirname, '../databases');
 
@@ -26,6 +26,11 @@ async function downloadFile(url, filename) {
 
 async function updateDatabases() {
   try {
+    // Verify MaxMind license key exists
+    if (!process.env.MAXMIND_LICENSE_KEY) {
+      throw new Error('MAXMIND_LICENSE_KEY is not set in environment variables');
+    }
+
     if (!fs.existsSync(DB_PATH)) {
       fs.mkdirSync(DB_PATH, { recursive: true });
     }
@@ -34,8 +39,10 @@ async function updateDatabases() {
     
     // Download and process MaxMind GeoLite2
     const tarFile = path.join(DB_PATH, 'GeoLite2-City.tar.gz');
+    const maxmindUrl = `https://download.maxmind.com/app/geoip_download?edition_id=GeoLite2-City&license_key=${process.env.MAXMIND_LICENSE_KEY}&suffix=tar.gz`;
+    console.log('Downloading MaxMind database...');
     await downloadFile(
-      `https://download.maxmind.com/app/geoip_download?edition_id=GeoLite2-City&license_key=${process.env.MAXMIND_LICENSE_KEY}&suffix=tar.gz`,
+      maxmindUrl,
       tarFile
     );
 
