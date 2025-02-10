@@ -5,6 +5,7 @@ const fs = require('fs');
 const { Reader } = require('@maxmind/geoip2-node');
 require('dotenv').config();
 const { getIPTags } = require('./utils/ipUtils');
+const { checkHttpBl } = require('./utils/httpblUtils');
 
 const app = express();
 app.use(cors());
@@ -53,7 +54,7 @@ function isValidIP(ip) {
   return parts.every(part => part >= 0 && part <= 255);
 }
 
-async function lookupIP(ip) {
+async function lookupIP(ip, enableHttpBL = false) {
   try {
     // Validate IP before processing
     if (!isValidIP(ip)) {
@@ -77,6 +78,9 @@ async function lookupIP(ip) {
     const result = await reader.city(ip);
     console.log('Raw GeoIP lookup result:', JSON.stringify(result, null, 2));
     
+    // Only get Http:BL data if enabled
+    const httpblData = enableHttpBL ? await checkHttpBl(ip) : null;
+    
     // Add reputation data
     const reputation = {
       isInFireHOL: !!fireholIPs[ip],
@@ -84,6 +88,28 @@ async function lookupIP(ip) {
       threatLevel: fireholIPs[ip] ? 'high' : (torExitIPs[ip] ? 'medium' : 'low'),
       tags: [...getIPTags(ip)]
     };
+
+    // Add Http:BL data if available
+    if (httpblData && enableHttpBL) {
+      if (httpblData.types.includes('search_engine')) {
+        reputation.threatLevel = 'medium';
+      } else if (httpblData.threatScore > 50) {
+        reputation.threatLevel = 'high';
+      } else if (httpblData.threatScore > 25) {
+        reputation.threatLevel = 'medium';
+      }
+      
+      // Add Http:BL tags
+      httpblData.types.forEach(type => {
+        reputation.tags.push(`httpbl_${type}`);
+      });
+      
+      reputation.httpbl = {
+        lastSeen: httpblData.lastSeen,
+        threatScore: httpblData.threatScore,
+        types: httpblData.types
+      };
+    }
 
     if (fireholIPs[ip]) reputation.tags.push('malicious');
     if (torExitIPs[ip]) reputation.tags.push('tor_exit');
@@ -104,14 +130,8 @@ async function lookupIP(ip) {
       isp: result?.traits?.isp || 'Unknown',
       organization: result?.traits?.organization || 'Unknown',
       reputation: {
-        isInFireHOL: !!fireholIPs[ip],
-        isTorExit: !!torExitIPs[ip],
-        threatLevel: fireholIPs[ip] ? 'high' : (torExitIPs[ip] ? 'medium' : 'low'),
-        tags: [
-          ...reputation.tags,
-          ...(fireholIPs[ip] ? ['malicious'] : []),
-          ...(torExitIPs[ip] ? ['tor_exit'] : [])
-        ]
+        ...reputation,
+        httpbl: httpblData || undefined
       }
     };
 
@@ -135,7 +155,7 @@ async function lookupIP(ip) {
 
 app.post('/api/analyze', async (req, res) => {
   try {
-    const ip = req.body.input;
+    const { input: ip, enableHttpBL } = req.body;
     console.log('Received request with input:', ip);
     
     // Split input into IPs using multiple delimiters (newlines, commas, spaces)
@@ -150,7 +170,7 @@ app.post('/api/analyze', async (req, res) => {
       const batch = ips.slice(i, i + BATCH_SIZE);
       console.log(`Processing batch ${i/BATCH_SIZE + 1} of ${Math.ceil(ips.length/BATCH_SIZE)}`);
       const batchResults = await Promise.all(
-        batch.map(ip => lookupIP(ip.trim()))
+        batch.map(ip => lookupIP(ip.trim(), enableHttpBL))
       );
       results.push(...batchResults);
     }

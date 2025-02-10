@@ -18,7 +18,11 @@ import InputLabel from '@mui/material/InputLabel';
 import Select from '@mui/material/Select';
 import Chip from '@mui/material/Chip';
 import Stack from '@mui/material/Stack';
+import Link from '@mui/material/Link';
+import Checkbox from '@mui/material/Checkbox';
+import FormControlLabel from '@mui/material/FormControlLabel';
 import { isValidIP, getIPTags, cleanIPList } from './utils/ipUtils';
+import AdUnit from './components/AdUnit';
 
 const theme = createTheme({
   palette: {
@@ -47,6 +51,7 @@ function App() {
   const [threatFilter, setThreatFilter] = useState('all');
   const [countryFilter, setCountryFilter] = useState('all');
   const [tagFilter, setTagFilter] = useState('all');
+  const [enableHttpBL, setEnableHttpBL] = useState(false);
 
   // Get unique countries and sort them
   const countries = useMemo(() => {
@@ -130,7 +135,10 @@ function App() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ input: validIPs.join('\n') }),
+        body: JSON.stringify({ 
+          input: validIPs.join('\n'),
+          enableHttpBL: enableHttpBL 
+        }),
       });
 
       if (!response.ok) {
@@ -227,12 +235,14 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Container>
+      <Container sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
         <Box sx={{ my: 4 }}>
           <Typography variant="h1" component="h1" gutterBottom>
             IPSleuth
           </Typography>
           
+          <AdUnit slot="6498742580" format="horizontal" />
+
           <form onSubmit={handleSubmit}>
             <Grid container spacing={2}>
               <Grid item xs={12}>
@@ -246,6 +256,23 @@ function App() {
                   variant="outlined"
                   placeholder="Enter IPs (one per line, or separated by commas)&#10;Example:&#10;8.8.8.8&#10;1.1.1.1&#10;9.9.9.9"
                 />
+              </Grid>
+              <Grid item xs={12}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={enableHttpBL}
+                        onChange={(e) => setEnableHttpBL(e.target.checked)}
+                        color="primary"
+                      />
+                    }
+                    label="Enable Project Honey Pot Lookup"
+                  />
+                  <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                    ⚠️ May slow down results. Limited to 10k queries/day.
+                  </Typography>
+                </Box>
               </Grid>
               <Grid item xs={12}>
                 <Button
@@ -379,6 +406,7 @@ function App() {
                         tag === 'tor_exit' ? 'warning' :
                         tag === 'public_ip' ? 'success' :
                         tag === 'malformed_ip' ? 'error' :
+                        tag === 'httpbl_search_engine' ? 'error' :
                         'default'
                       }
                       variant={tagFilter === tag ? 'filled' : 'outlined'}
@@ -397,30 +425,162 @@ function App() {
                 <MenuItem onClick={downloadAsCSV}>Download as CSV</MenuItem>
               </Menu>
               {filteredResults.map((result, index) => (
-                <Box key={index} sx={{ mb: 2, p: 2, bgcolor: 'background.paper', borderRadius: 1 }}>
-                  <Typography variant="h6" gutterBottom>
-                    IP: {result.ip}
-                  </Typography>
-                  <Typography>
-                    Location: {result.city}, {result.country} ({result.continent})
-                  </Typography>
-                  <Typography>
-                    Organization: {result.organization}
-                  </Typography>
-                  {result.reputation && (
-                    <>
-                      <Typography>
-                        Threat Level: {result.reputation.threatLevel}
-                      </Typography>
-                      <Typography>
-                        Tags: {result.reputation.tags.join(', ') || 'None'}
-                      </Typography>
-                    </>
-                  )}
-                </Box>
+                <React.Fragment key={index}>
+                  <Box sx={{ mb: 2, p: 2, bgcolor: 'background.paper', borderRadius: 1 }}>
+                    <Typography variant="h6" gutterBottom>
+                      IP: {result.ip}
+                    </Typography>
+                    <Typography>
+                      Location: {result.city}, {result.country} ({result.continent})
+                    </Typography>
+                    <Typography>
+                      Organization: {result.organization}
+                    </Typography>
+                    {result.reputation && (
+                      <>
+                        <Typography>
+                          Threat Level: {result.reputation.threatLevel}
+                        </Typography>
+                        <Typography>
+                          Tags: {result.reputation.tags.join(', ') || 'None'}
+                        </Typography>
+                        {result.reputation.httpbl && (
+                          <>
+                            <Typography>
+                              Project Honey Pot Data:
+                            </Typography>
+                            <Typography component="div" sx={{ pl: 2 }}>
+                              • Last Seen: {result.reputation.httpbl.lastSeen} days ago
+                              <br />
+                              • Threat Score: {result.reputation.httpbl.threatScore}/255
+                              <br />
+                              • Types: {result.reputation.httpbl.types.map(t => 
+                                t.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+                              ).join(', ')}
+                            </Typography>
+                          </>
+                        )}
+                      </>
+                    )}
+                  </Box>
+                  {(index + 1) % 10 === 0 && <AdUnit slot="2868550968" />}
+                </React.Fragment>
               ))}
             </Box>
           )}
+        </Box>
+
+        <AdUnit slot="2172484767" format="horizontal" />
+
+        <Box 
+          component="footer" 
+          sx={{ 
+            mt: 'auto', 
+            py: 3, 
+            textAlign: 'center',
+            borderTop: 1,
+            borderColor: 'divider'
+          }}
+        >
+          <Typography variant="body2" color="text.secondary" gutterBottom>
+            Made with 💝 by human persistence and AI brilliance.
+          </Typography>
+          <Typography variant="body2" color="text.secondary" gutterBottom>
+            Special thanks to{' '}
+            <Link 
+              href="https://www.cursor.com" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              color="primary"
+            >
+              Cursor.ai
+            </Link>
+            {' '}for making coding fun for everyone!
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+            Built overnight and proudly open-sourced at{' '}
+            <Link href="https://github.com/anindyar/ipsleuth">GitHub</Link>
+            . Hope the AI doesn't mind me sharing its work! 😉
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 3, pb: 2, borderBottom: 1, borderColor: 'divider' }}>
+            🏆 Standing on the Shoulders of Giants 🏆
+          </Typography>
+          
+          <Stack spacing={2} sx={{ mt: 2, textAlign: 'left' }}>
+            <Box>
+              <Typography variant="subtitle2" color="primary">
+                🌍 GeoLite2 by MaxMind
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Powering our IP geolocation with scary accuracy! Check them out at{' '}
+                <Link href="https://www.maxmind.com" target="_blank" rel="noopener">MaxMind</Link>
+              </Typography>
+            </Box>
+            
+            <Box>
+              <Typography variant="subtitle2" color="primary">
+                🍯 Project Honey Pot
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                The sweetest way to catch bad actors! Learn more at{' '}
+                <Link href="https://www.projecthoneypot.org" target="_blank" rel="noopener">Project Honey Pot</Link>
+              </Typography>
+            </Box>
+            
+            <Box>
+              <Typography variant="subtitle2" color="primary">
+                🔥 FireHOL IP Lists
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Keeping the internet's temperature in check since 2014!{' '}
+                <Link href="https://iplists.firehol.org" target="_blank" rel="noopener">FireHOL</Link>
+              </Typography>
+            </Box>
+            
+            <Box>
+              <Typography variant="subtitle2" color="primary">
+                🧅 Tor Exit Nodes
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Because sometimes privacy needs layers! Data from{' '}
+                <Link href="https://metrics.torproject.org" target="_blank" rel="noopener">Tor Project</Link>
+              </Typography>
+            </Box>
+          </Stack>
+
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 2, fontStyle: 'italic' }}>
+            🎵 Servers don't run on hopes and dreams... yet! 🌟
+            <br />
+            If you're feeling generous and want to keep this free tool alive, toss a coin to your IP checker:
+            <br />
+            <Box component="span" sx={{ 
+              fontFamily: 'monospace', 
+              bgcolor: 'background.paper', 
+              px: 1, 
+              py: 0.5, 
+              borderRadius: 1,
+              display: 'inline-block',
+              mt: 1,
+              cursor: 'pointer',
+              '&:hover': {
+                bgcolor: 'action.hover'
+              }
+            }}
+            onClick={(e) => {
+              navigator.clipboard.writeText('0xd077045df46e66d58fcb232b815d86f872b7ab72');
+              e.currentTarget.innerText = 'Copied! 🎉';
+              setTimeout(() => {
+                e.currentTarget.innerText = '0xd077045df46e66d58fcb232b815d86f872b7ab72';
+              }, 1500);
+            }}
+            >
+              0xd077045df46e66d58fcb232b815d86f872b7ab72
+            </Box>
+            <br />
+            <Typography variant="caption" sx={{ mt: 0.5, display: 'block' }}>
+              (Click to copy the ETH address. Every little bit helps! 💖)
+            </Typography>
+          </Typography>
         </Box>
       </Container>
     </ThemeProvider>
