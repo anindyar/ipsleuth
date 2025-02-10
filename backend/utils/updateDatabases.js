@@ -30,19 +30,19 @@ async function updateDatabases() {
     }
 
     console.log('Updating IP databases...');
+    
+    // Download and process MaxMind GeoLite2
     const tarFile = path.join(DB_PATH, 'GeoLite2-City.tar.gz');
     await downloadFile(
       `https://download.maxmind.com/app/geoip_download?edition_id=GeoLite2-City&license_key=${process.env.MAXMIND_LICENSE_KEY}&suffix=tar.gz`,
       tarFile
     );
 
-    // Extract the tar.gz file
     await tar.x({
       file: tarFile,
       cwd: DB_PATH
     });
 
-    // Find and move the .mmdb file
     const mmdbFile = fs.readdirSync(DB_PATH)
       .find(file => file.startsWith('GeoLite2-City_') && file.endsWith('.mmdb'));
     if (mmdbFile) {
@@ -51,6 +51,24 @@ async function updateDatabases() {
         path.join(DB_PATH, 'GeoLite2-City.mmdb')
       );
     }
+
+    // Download FireHOL blocklist
+    console.log('Downloading FireHOL blocklist...');
+    const fireholResponse = await axios.get('https://iplists.firehol.org/files/firehol_level1.netset');
+    const fireholIPs = {};
+    fireholResponse.data.split('\n')
+      .filter(line => !line.startsWith('#') && line.trim())
+      .forEach(ip => { fireholIPs[ip.trim()] = true; });
+    fs.writeFileSync(path.join(DB_PATH, 'firehol.json'), JSON.stringify(fireholIPs));
+
+    // Download Tor exit nodes
+    console.log('Downloading Tor exit nodes...');
+    const torResponse = await axios.get('https://check.torproject.org/torbulkexitlist');
+    const torIPs = {};
+    torResponse.data.split('\n')
+      .filter(ip => ip.trim())
+      .forEach(ip => { torIPs[ip.trim()] = true; });
+    fs.writeFileSync(path.join(DB_PATH, 'tor_exits.json'), JSON.stringify(torIPs));
 
     // Cleanup
     fs.unlinkSync(tarFile);

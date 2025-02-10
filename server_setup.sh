@@ -127,7 +127,7 @@ mkdir -p databases
 
 # Create backend .env file
 mkdir -p backend
-cat > backend/.env << 'ENVEOF'
+cat > backend/.env << ENVEOF
 PORT=3001
 NODE_ENV=production
 MAXMIND_LICENSE_KEY=${MAXMIND_KEY}
@@ -206,7 +206,7 @@ app.listen(PORT, () => {
 SERVERJS
 
 # Create updateDatabases.js
-cat > backend/utils/updateDatabases.js << 'UPDATEDB'
+cat > backend/utils/updateDatabases.js << UPDATEDB
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
@@ -241,7 +241,7 @@ async function updateDatabases() {
     console.log('Updating IP databases...');
     const tarFile = path.join(DB_PATH, 'GeoLite2-City.tar.gz');
     await downloadFile(
-      `https://download.maxmind.com/app/geoip_download?edition_id=GeoLite2-City&license_key=${process.env.MAXMIND_LICENSE_KEY}&suffix=tar.gz`,
+      \`https://download.maxmind.com/app/geoip_download?edition_id=GeoLite2-City&license_key=\${process.env.MAXMIND_LICENSE_KEY}&suffix=tar.gz\`,
       tarFile
     );
 
@@ -479,31 +479,50 @@ USEREOF
 # Configure nginx
 cat > /etc/nginx/sites-available/ipsleuth << 'NGINXCONF'
 server {
-    listen 80;
     server_name ipsleuth.io www.ipsleuth.io;
 
     root /var/www/ipsleuth/frontend/build;
     index index.html;
 
     location / {
-        try_files \$uri \$uri/ /index.html;
+        try_files $uri $uri/ /index.html =404;
     }
 
     location /api {
         proxy_pass http://localhost:3001;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
-        proxy_set_header Host \$host;
-        proxy_cache_bypass \$http_upgrade;
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
     }
 
-    # Add security headers
-    add_header X-Frame-Options "SAMEORIGIN";
-    add_header X-XSS-Protection "1; mode=block";
-    add_header X-Content-Type-Options "nosniff";
-    add_header Referrer-Policy "strict-origin-secure";
-    add_header Content-Security-Policy "default-src 'self' 'unsafe-inline' 'unsafe-eval' https:; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' data: https:;";
+    # Gzip compression for better performance
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+    gzip_vary on;
+
+    # Security Headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' data: https:;" always;
+
+    listen 443 ssl; # managed by Certbot
+    ssl_certificate /etc/letsencrypt/live/ipsleuth.io/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/ipsleuth.io/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+}
+
+server {
+    listen 80;
+    server_name ipsleuth.io www.ipsleuth.io;
+
+    location / {
+        return 301 https://ipsleuth.io$request_uri;
+    }
 }
 NGINXCONF
 
