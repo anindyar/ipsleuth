@@ -78,7 +78,9 @@ async function lookupIP(ip) {
 app.post('/api/analyze', async (req, res) => {
   try {
     const ip = req.body.input;
+    console.log('Received request for IP:', ip);
     const result = await lookupIP(ip);
+    console.log('Analysis result:', result);
     res.json([result]);
   } catch (error) {
     console.error('Error processing request:', error);
