@@ -1,0 +1,15 @@
+{
+  "scripts": {
+    "start": "node server.js",
+    "update-db": "node utils/updateDatabases.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.3",
+    "axios": "^1.4.0",
+    "extract-zip": "^2.0.1",
+    "tar": "^6.1.13",
+    "@maxmind/geoip2-node": "^4.2.0"
+  }
+} 

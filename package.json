@@ -1,0 +1,14 @@
+{
+  "name": "ipsleuth",
+  "version": "1.0.0",
+  "description": "IP address analysis tool",
+  "scripts": {
+    "install:all": "npm install && npm install --prefix frontend && npm install --prefix backend",
+    "start:frontend": "npm start --prefix frontend",
+    "start:backend": "npm start --prefix backend",
+    "build": "npm run build --prefix frontend",
+    "update-db": "npm run update-db --prefix backend"
+  },
+  "author": "",
+  "license": "ISC"
+} 
