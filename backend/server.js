@@ -11,6 +11,7 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3001;
 const DB_PATH = path.join(__dirname, 'databases/GeoLite2-City.mmdb');
+let reader = null;
 
 // Verify database exists at startup
 if (!fs.existsSync(DB_PATH)) {
@@ -18,6 +19,15 @@ if (!fs.existsSync(DB_PATH)) {
   process.exit(1);
 }
 console.log('GeoIP database found at:', DB_PATH);
+
+// Initialize the reader once
+Reader.open(DB_PATH).then(r => {
+  reader = r;
+  console.log('MaxMind database reader initialized');
+}).catch(err => {
+  console.error('Failed to initialize MaxMind reader:', err);
+  process.exit(1);
+});
 
 // Load reputation databases
 let fireholIPs = {};
@@ -58,19 +68,11 @@ async function lookupIP(ip) {
       };
     }
 
-    // Verify database exists
-    if (!fs.existsSync(DB_PATH)) {
-      throw new Error(`GeoIP database not found at ${DB_PATH}`);
+    // Verify reader is initialized
+    if (!reader) {
+      throw new Error('MaxMind database reader not initialized');
     }
 
-    // Log database stats
-    const stats = fs.statSync(DB_PATH);
-    console.log('Database file stats:', {
-      size: stats.size,
-      modified: stats.mtime
-    });
-
-    const reader = await Reader.open(DB_PATH);
     const result = await reader.city(ip);
     console.log('Raw GeoIP lookup result:', JSON.stringify(result, null, 2));
     
@@ -136,12 +138,20 @@ app.post('/api/analyze', async (req, res) => {
     
     // Split input into IPs using multiple delimiters (newlines, commas, spaces)
     const ips = ip.split(/[\n,\s]+/).filter(ip => ip.trim());
-    console.log('Processing IPs:', ips);
+    console.log(`Processing ${ips.length} IPs`);
     
-    // Process all IPs in parallel
-    const results = await Promise.all(
-      ips.map(ip => lookupIP(ip.trim()))
-    );
+    // Process IPs in batches of 50
+    const BATCH_SIZE = 50;
+    const results = [];
+    
+    for (let i = 0; i < ips.length; i += BATCH_SIZE) {
+      const batch = ips.slice(i, i + BATCH_SIZE);
+      console.log(`Processing batch ${i/BATCH_SIZE + 1} of ${Math.ceil(ips.length/BATCH_SIZE)}`);
+      const batchResults = await Promise.all(
+        batch.map(ip => lookupIP(ip.trim()))
+      );
+      results.push(...batchResults);
+    }
     
     console.log(`Analyzed ${results.length} IPs`);
     res.json(results);

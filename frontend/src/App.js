@@ -11,6 +11,7 @@ import UploadFileIcon from '@mui/icons-material/UploadFile';
 import DownloadIcon from '@mui/icons-material/Download';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
+import LinearProgress from '@mui/material/LinearProgress';
 
 const theme = createTheme({
   palette: {
@@ -34,12 +35,14 @@ function App() {
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [progress, setProgress] = useState(0);
   const [anchorEl, setAnchorEl] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setProgress(0);
 
     try {
       // Clean up input - remove empty lines and extra whitespace
@@ -48,6 +51,11 @@ function App() {
         .filter(ip => ip.trim())
         .join('\n');
       
+      const ips = cleanInput.split(/[\n,\s]+/).filter(ip => ip.trim());
+      if (ips.length > 50) {
+        setProgress(0);
+      }
+
       const response = await fetch('/api/analyze', {
         method: 'POST',
         headers: {
@@ -61,6 +69,7 @@ function App() {
       }
 
       const data = await response.json();
+      setProgress(100);
       setResults(data);
     } catch (err) {
       console.error('Error:', err);
@@ -192,6 +201,15 @@ function App() {
                   {loading ? 'Analyzing...' : 'ANALYZE'}
                 </Button>
               </Grid>
+              {progress > 0 && progress < 100 && (
+                <Grid item xs={12}>
+                  <LinearProgress 
+                    variant="determinate" 
+                    value={progress} 
+                    sx={{ mt: 2 }}
+                  />
+                </Grid>
+              )}
             </Grid>
           </form>
 
