@@ -12,6 +12,13 @@ app.use(express.json());
 const PORT = process.env.PORT || 3001;
 const DB_PATH = path.join(__dirname, 'databases/GeoLite2-City.mmdb');
 
+// Verify database exists at startup
+if (!fs.existsSync(DB_PATH)) {
+  console.error('GeoIP database not found at:', DB_PATH);
+  process.exit(1);
+}
+console.log('GeoIP database found at:', DB_PATH);
+
 // Load reputation databases
 let fireholIPs = {};
 let torExitIPs = {};
@@ -27,10 +34,45 @@ try {
   console.error('Reputation data will not be available');
 }
 
+function isValidIP(ip) {
+  const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
+  if (!ipv4Regex.test(ip)) return false;
+  
+  const parts = ip.split('.').map(part => parseInt(part, 10));
+  return parts.every(part => part >= 0 && part <= 255);
+}
+
 async function lookupIP(ip) {
   try {
+    // Validate IP before processing
+    if (!isValidIP(ip)) {
+      return {
+        ip,
+        error: 'Invalid IP address format',
+        reputation: {
+          isInFireHOL: false,
+          isTorExit: false,
+          threatLevel: 'unknown',
+          tags: []
+        }
+      };
+    }
+
+    // Verify database exists
+    if (!fs.existsSync(DB_PATH)) {
+      throw new Error(`GeoIP database not found at ${DB_PATH}`);
+    }
+
+    // Log database stats
+    const stats = fs.statSync(DB_PATH);
+    console.log('Database file stats:', {
+      size: stats.size,
+      modified: stats.mtime
+    });
+
     const reader = await Reader.open(DB_PATH);
     const result = await reader.city(ip);
+    console.log('Raw GeoIP lookup result:', JSON.stringify(result, null, 2));
     
     // Add reputation data
     const reputation = {
@@ -46,25 +88,37 @@ async function lookupIP(ip) {
     // Log reputation check
     console.log(`Reputation check for ${ip}:`, reputation);
 
-    return {
+    const response = {
       ip,
-      city: result.city?.names?.en || 'Unknown',
-      country: result.country?.names?.en || 'Unknown',
-      continent: result.continent?.names?.en || 'Unknown',
+      city: result?.city?.names?.en || 'Unknown',
+      country: result?.country?.names?.en || 'Unknown',
+      continent: result?.continent?.names?.en || 'Unknown',
       location: {
-        latitude: result.location?.latitude,
-        longitude: result.location?.longitude,
-        accuracy_radius: result.location?.accuracyRadius
+        latitude: result?.location?.latitude || null,
+        longitude: result?.location?.longitude || null,
+        accuracy_radius: result?.location?.accuracyRadius || null
       },
-      isp: result.traits?.isp || 'Unknown',
-      organization: result.traits?.organization || 'Unknown',
-      reputation
+      isp: result?.traits?.isp || 'Unknown',
+      organization: result?.traits?.organization || 'Unknown',
+      reputation: {
+        isInFireHOL: !!fireholIPs[ip],
+        isTorExit: !!torExitIPs[ip],
+        threatLevel: fireholIPs[ip] ? 'high' : (torExitIPs[ip] ? 'medium' : 'low'),
+        tags: [
+          ...(fireholIPs[ip] ? ['malicious'] : []),
+          ...(torExitIPs[ip] ? ['tor_exit'] : [])
+        ]
+      }
     };
+
+    console.log('Final response:', JSON.stringify(response, null, 2));
+    return response;
   } catch (error) {
-    console.error(`Error looking up IP ${ip}:`, error);
+    console.error(`Error looking up IP ${ip}:`, error.message);
+    console.error('Stack trace:', error.stack);
     return { 
       ip, 
-      error: 'Failed to lookup IP',
+      error: `Failed to lookup IP: ${error.message}`,
       reputation: {
         isInFireHOL: !!fireholIPs[ip],
         isTorExit: !!torExitIPs[ip],
@@ -78,10 +132,19 @@ async function lookupIP(ip) {
 app.post('/api/analyze', async (req, res) => {
   try {
     const ip = req.body.input;
-    console.log('Received request for IP:', ip);
-    const result = await lookupIP(ip);
-    console.log('Analysis result:', result);
-    res.json([result]);
+    console.log('Received request with input:', ip);
+    
+    // Split input into IPs using multiple delimiters (newlines, commas, spaces)
+    const ips = ip.split(/[\n,\s]+/).filter(ip => ip.trim());
+    console.log('Processing IPs:', ips);
+    
+    // Process all IPs in parallel
+    const results = await Promise.all(
+      ips.map(ip => lookupIP(ip.trim()))
+    );
+    
+    console.log(`Analyzed ${results.length} IPs`);
+    res.json(results);
   } catch (error) {
     console.error('Error processing request:', error);
     res.status(500).json({ error: 'Internal server error' });

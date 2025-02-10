@@ -7,6 +7,10 @@ import Grid from '@mui/material/Grid';
 import Typography from '@mui/material/Typography';
 import TextField from '@mui/material/TextField';
 import Button from '@mui/material/Button';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
+import DownloadIcon from '@mui/icons-material/Download';
+import Menu from '@mui/material/Menu';
+import MenuItem from '@mui/material/MenuItem';
 
 const theme = createTheme({
   palette: {
@@ -26,9 +30,11 @@ const theme = createTheme({
 
 function App() {
   const [input, setInput] = useState('');
+  const [file, setFile] = useState(null);
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [anchorEl, setAnchorEl] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -36,12 +42,18 @@ function App() {
     setError(null);
 
     try {
+      // Clean up input - remove empty lines and extra whitespace
+      const cleanInput = input
+        .split(/[\n,\s]+/)
+        .filter(ip => ip.trim())
+        .join('\n');
+      
       const response = await fetch('/api/analyze', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ input }),
+        body: JSON.stringify({ input: cleanInput }),
       });
 
       if (!response.ok) {
@@ -58,6 +70,80 @@ function App() {
     }
   };
 
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const text = e.target.result;
+        // Extract and clean IPs
+        const ips = text
+          .match(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g)
+          ?.filter(ip => ip.trim()) || [];
+        setInput(ips.join('\n'));
+      };
+      reader.readAsText(file);
+    }
+  };
+
+  const handleDownloadClick = (event) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleDownloadClose = () => {
+    setAnchorEl(null);
+  };
+
+  const downloadAsJSON = () => {
+    const dataStr = JSON.stringify(results, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'ip_analysis.json';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    handleDownloadClose();
+  };
+
+  const downloadAsCSV = () => {
+    const headers = ['IP', 'City', 'Country', 'Continent', 'Latitude', 'Longitude', 
+                    'Accuracy Radius', 'ISP', 'Organization', 'Threat Level', 'Tags'];
+    const rows = results.map(r => [
+      r.ip,
+      r.city,
+      r.country,
+      r.continent,
+      r.location.latitude,
+      r.location.longitude,
+      r.location.accuracy_radius,
+      r.isp,
+      r.organization,
+      r.reputation.threatLevel,
+      r.reputation.tags.join(';')
+    ]);
+    
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => 
+        cell ? `"${cell.toString().replace(/"/g, '""')}"` : '""'
+      ).join(','))
+    ].join('\n');
+
+    const dataBlob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'ip_analysis.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    handleDownloadClose();
+  };
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
@@ -72,12 +158,29 @@ function App() {
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="Enter IP Address"
+                  multiline
+                  rows={4}
+                  label="Enter IP Address(es)"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   variant="outlined"
-                  placeholder="e.g., 8.8.8.8"
+                  placeholder="Enter IPs (one per line, or separated by commas)&#10;Example:&#10;8.8.8.8&#10;1.1.1.1&#10;9.9.9.9"
                 />
+              </Grid>
+              <Grid item xs={12}>
+                <Button
+                  variant="outlined"
+                  component="label"
+                  startIcon={<UploadFileIcon />}
+                >
+                  Upload IP List
+                  <input
+                    type="file"
+                    hidden
+                    accept=".txt,.csv"
+                    onChange={handleFileUpload}
+                  />
+                </Button>
               </Grid>
               <Grid item xs={12}>
                 <Button 
@@ -100,6 +203,25 @@ function App() {
 
           {results.length > 0 && (
             <Box sx={{ mt: 4 }}>
+              <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
+                <Button
+                  variant="contained"
+                  color="secondary"
+                  startIcon={<DownloadIcon />}
+                  onClick={handleDownloadClick}
+                  disabled={!results.length}
+                >
+                  Download Results
+                </Button>
+                <Menu
+                  anchorEl={anchorEl}
+                  open={Boolean(anchorEl)}
+                  onClose={handleDownloadClose}
+                >
+                  <MenuItem onClick={downloadAsJSON}>Download as JSON</MenuItem>
+                  <MenuItem onClick={downloadAsCSV}>Download as CSV</MenuItem>
+                </Menu>
+              </Box>
               {results.map((result, index) => (
                 <Box key={index} sx={{ mb: 2, p: 2, bgcolor: 'background.paper', borderRadius: 1 }}>
                   <Typography variant="h6" gutterBottom>
