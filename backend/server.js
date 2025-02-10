@@ -1,11 +1,9 @@
 const express = require('express');
 const cors = require('cors');
-const dotenv = require('dotenv');
 const path = require('path');
 const fs = require('fs');
-const Reader = require('@maxmind/geoip2-node').Reader;
-
-dotenv.config();
+const { Reader } = require('@maxmind/geoip2-node');
+require('dotenv').config();
 
 const app = express();
 app.use(cors());
@@ -21,8 +19,12 @@ let torExitIPs = {};
 try {
   fireholIPs = JSON.parse(fs.readFileSync(path.join(__dirname, 'databases/firehol.json'), 'utf8'));
   torExitIPs = JSON.parse(fs.readFileSync(path.join(__dirname, 'databases/tor_exits.json'), 'utf8'));
+  console.log(`Successfully loaded reputation databases:
+    - FireHOL IPs: ${Object.keys(fireholIPs).length}
+    - Tor Exit Nodes: ${Object.keys(torExitIPs).length}`);
 } catch (error) {
-  console.warn('Warning: Some reputation databases could not be loaded:', error);
+  console.error('Error loading reputation databases:', error.message);
+  console.error('Reputation data will not be available');
 }
 
 async function lookupIP(ip) {
@@ -40,6 +42,9 @@ async function lookupIP(ip) {
 
     if (fireholIPs[ip]) reputation.tags.push('malicious');
     if (torExitIPs[ip]) reputation.tags.push('tor_exit');
+
+    // Log reputation check
+    console.log(`Reputation check for ${ip}:`, reputation);
 
     return {
       ip,
@@ -64,33 +69,25 @@ async function lookupIP(ip) {
         isInFireHOL: !!fireholIPs[ip],
         isTorExit: !!torExitIPs[ip],
         threatLevel: fireholIPs[ip] ? 'high' : (torExitIPs[ip] ? 'medium' : 'low'),
-        tags: [
-          ...(fireholIPs[ip] ? ['malicious'] : []),
-          ...(torExitIPs[ip] ? ['tor_exit'] : [])
-        ]
+        tags: []
       }
     };
   }
 }
 
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'healthy' });
-});
-
 app.post('/api/analyze', async (req, res) => {
   try {
-    const { input, type } = req.body;
-    const ips = input.split(/[\n,\s]+/).filter(ip => ip.trim());
-    
-    const results = await Promise.all(
-      ips.map(ip => lookupIP(ip.trim()))
-    );
-    
-    res.json(results);
+    const ip = req.body.input;
+    const result = await lookupIP(ip);
+    res.json([result]);
   } catch (error) {
-    console.error('Error analyzing IPs:', error);
-    res.status(500).json({ error: 'Failed to analyze IPs' });
+    console.error('Error processing request:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
+});
+
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok' });
 });
 
 app.listen(PORT, () => {

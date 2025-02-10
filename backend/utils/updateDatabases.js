@@ -3,6 +3,7 @@ const path = require('path');
 const axios = require('axios');
 const extract = require('extract-zip');
 const tar = require('tar');
+const downloadReputationDBs = require('./downloadReputationDBs');
 require('dotenv').config();
 
 const DB_PATH = path.join(__dirname, '../databases');
@@ -52,23 +53,8 @@ async function updateDatabases() {
       );
     }
 
-    // Download FireHOL blocklist
-    console.log('Downloading FireHOL blocklist...');
-    const fireholResponse = await axios.get('https://iplists.firehol.org/files/firehol_level1.netset');
-    const fireholIPs = {};
-    fireholResponse.data.split('\n')
-      .filter(line => !line.startsWith('#') && line.trim())
-      .forEach(ip => { fireholIPs[ip.trim()] = true; });
-    fs.writeFileSync(path.join(DB_PATH, 'firehol.json'), JSON.stringify(fireholIPs));
-
-    // Download Tor exit nodes
-    console.log('Downloading Tor exit nodes...');
-    const torResponse = await axios.get('https://check.torproject.org/torbulkexitlist');
-    const torIPs = {};
-    torResponse.data.split('\n')
-      .filter(ip => ip.trim())
-      .forEach(ip => { torIPs[ip.trim()] = true; });
-    fs.writeFileSync(path.join(DB_PATH, 'tor_exits.json'), JSON.stringify(torIPs));
+    // Download reputation databases
+    await downloadReputationDBs();
 
     // Cleanup
     fs.unlinkSync(tarFile);
