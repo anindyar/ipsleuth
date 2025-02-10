@@ -123,7 +123,7 @@ cd /var/www/ipsleuth
 
 # Clone the repository
 git clone https://github.com/anindyar/ipsleuth.git .
-mkdir -p databases
+mkdir -p backend/databases frontend/build
 
 # Create backend .env file
 mkdir -p backend
@@ -312,26 +312,18 @@ nvm install 18
 nvm use 18
 
 # Create frontend package.json
-cat > package.json << 'FRONTENDPKG'
+cat > frontend/package.json << 'FRONTENDPKG'
 {
-  "name": "frontend",
-  "version": "0.1.0",
+  "name": "ipsleuth-frontend",
+  "version": "1.0.0",
   "private": true,
   "dependencies": {
     "@emotion/react": "^11.11.0",
     "@emotion/styled": "^11.11.0",
-    "@mui/icons-material": "^5.11.16",
     "@mui/material": "^5.13.0",
-    "@testing-library/jest-dom": "^5.16.5",
-    "@testing-library/react": "^13.4.0",
-    "@testing-library/user-event": "^13.5.0",
-    "axios": "^1.4.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-scripts": "5.0.1",
-    "react-table": "^7.8.0",
-    "web-vitals": "^2.1.4",
-    "ajv": "^8.12.0"
+    "react-scripts": "5.0.1"
   },
   "scripts": {
     "start": "react-scripts start",
@@ -340,135 +332,40 @@ cat > package.json << 'FRONTENDPKG'
     "eject": "react-scripts eject"
   },
   "eslintConfig": {
-    "extends": ["react-app"]
+    "extends": [
+      "react-app"
+    ]
   },
   "browserslist": {
-    "production": [">0.2%", "not dead", "not op_mini all"],
-    "development": ["last 1 chrome version", "last 1 firefox version", "last 1 safari version"]
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
   }
 }
 FRONTENDPKG
 
-# Create React files
-mkdir -p src public
-mkdir -p src/components
-
-# Create index.html
-cat > public/index.html << 'INDEXHTML'
+# Create a minimal index.html for the frontend
+mkdir -p frontend/build
+cat > frontend/build/index.html << 'FRONTENDHTML'
 <!DOCTYPE html>
 <html lang="en">
-  <head>
+<head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#000000" />
-    <meta name="description" content="IPSleuth - Privacy-First IP Analysis Tool" />
     <title>IPSleuth</title>
-  </head>
-  <body>
-    <noscript>You need to enable JavaScript to run this app.</noscript>
+</head>
+<body>
     <div id="root"></div>
-  </body>
+</body>
 </html>
-INDEXHTML
-
-# Create index.js
-cat > src/index.js << 'INDEXJS'
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import App from './App';
-
-const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
-INDEXJS
-
-# Create App.js
-cat > src/App.js << 'APPJS'
-import React, { useState } from 'react';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
-import CssBaseline from '@mui/material/CssBaseline';
-import Container from '@mui/material/Container';
-import Box from '@mui/material/Box';
-import Grid from '@mui/material/Grid';
-import Typography from '@mui/material/Typography';
-import TextField from '@mui/material/TextField';
-import Button from '@mui/material/Button';
-
-const theme = createTheme({
-  palette: {
-    mode: 'dark',
-    primary: { main: '#00bcd4' },
-    secondary: { main: '#ff4081' },
-    background: {
-      default: '#121212',
-      paper: '#1e1e1e',
-    },
-  },
-});
-
-function App() {
-  const [input, setInput] = useState('');
-  const [results, setResults] = useState([]);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      const response = await fetch('/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input, type: 'text' }),
-      });
-      const data = await response.json();
-      setResults(data);
-    } catch (error) {
-      console.error('Error:', error);
-    }
-  };
-
-  return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <Container maxWidth="lg">
-        <Box sx={{ my: 4 }}>
-          <Typography variant="h2" component="h1" gutterBottom>
-            IPSleuth
-          </Typography>
-          <form onSubmit={handleSubmit}>
-            <Grid container spacing={2}>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  multiline
-                  rows={4}
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder="Enter IP addresses (one per line)"
-                  variant="outlined"
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <Button type="submit" variant="contained" color="primary">
-                  Analyze
-                </Button>
-              </Grid>
-            </Grid>
-          </form>
-          {results.length > 0 && (
-            <Box sx={{ mt: 4 }}>
-              <pre>{JSON.stringify(results, null, 2)}</pre>
-            </Box>
-          )}
-        </Box>
-      </Container>
-    </ThemeProvider>
-  );
-}
-
-export default App;
-APPJS
+FRONTENDHTML
 
 npm install --legacy-peer-deps
 NODE_ENV=production npm run build
