@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { Reader } = require('@maxmind/geoip2-node');
 require('dotenv').config();
+const { getIPTags } = require('./utils/ipUtils');
 
 const app = express();
 app.use(cors());
@@ -63,7 +64,7 @@ async function lookupIP(ip) {
           isInFireHOL: false,
           isTorExit: false,
           threatLevel: 'unknown',
-          tags: []
+          tags: ['invalid']
         }
       };
     }
@@ -81,7 +82,7 @@ async function lookupIP(ip) {
       isInFireHOL: !!fireholIPs[ip],
       isTorExit: !!torExitIPs[ip],
       threatLevel: fireholIPs[ip] ? 'high' : (torExitIPs[ip] ? 'medium' : 'low'),
-      tags: []
+      tags: [...getIPTags(ip)]
     };
 
     if (fireholIPs[ip]) reputation.tags.push('malicious');
@@ -107,6 +108,7 @@ async function lookupIP(ip) {
         isTorExit: !!torExitIPs[ip],
         threatLevel: fireholIPs[ip] ? 'high' : (torExitIPs[ip] ? 'medium' : 'low'),
         tags: [
+          ...reputation.tags,
           ...(fireholIPs[ip] ? ['malicious'] : []),
           ...(torExitIPs[ip] ? ['tor_exit'] : [])
         ]
@@ -125,7 +127,7 @@ async function lookupIP(ip) {
         isInFireHOL: !!fireholIPs[ip],
         isTorExit: !!torExitIPs[ip],
         threatLevel: fireholIPs[ip] ? 'high' : (torExitIPs[ip] ? 'medium' : 'low'),
-        tags: []
+        tags: ['private_or_reserved_ip']
       }
     };
   }
